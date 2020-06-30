@@ -21,12 +21,12 @@
     <tr>
         <td>
             <div id="parent">
-            <video id="videoInput" width="320" height="240" muted loop></video>
+            <video id="videoInput" width="320" height="320" muted playsinline></video>
              <img id="child" src="./bomb.png"></img>
             </div>
         </td>
         <td>
-            <canvas id="canvasOutput" width="320" height="240" ></canvas>
+            <canvas id="canvasOutput" width="320" height="320" ></canvas>
         </td>
         <td></td>
         <td></td>
@@ -94,8 +94,8 @@ const mobile = isMobile();
       facingMode: 'user',
       // Only setting the video to a specified size in order to accommodate a
       // point cloud, so on mobile devices accept the default size.
-      width: mobile ? undefined : 320,
-      height: mobile ? undefined : 240} };
+      width: mobile ? 320 : 320,
+      height: mobile ? 320 : 320} };
 
         navigator.mediaDevices.getUserMedia(constraints)
         .then(function(stream) {
@@ -132,7 +132,7 @@ let frame = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
 cap.read(frame);
 
 // hardcode the initial location of window
-trackWindow = new cv.Rect(160, 120, 30, 10);
+trackWindow = new cv.Rect(160, 160, 30, 10);
 
 // set up the ROI for tracking
 let roi = frame.roi(trackWindow);
@@ -217,7 +217,7 @@ var hit=Math.sqrt(Math.pow(trackBox.center.x - bomb_x,2) + Math.pow(trackBox.cen
 var flg=0;
 cnt++;
 
-if(bomb_y > 240)
+if(bomb_y > 320)
 {
 flg=1;
 }
