@@ -1,0 +1,136 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Video Capture Example</title>
+<link href="./style.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<h2>Video Capture Example</h2>
+<p>
+    Click <b>Start/Stop</b> button to start or stop the camera capture.<br>
+    The <b>videoInput</b> is a &lt;video&gt; element used as OpenCV.js input.
+    The <b>canvasOutput</b> is a &lt;canvas&gt; element used as OpenCv.js output.<br>
+</p>
+<div>
+<div class="control"><button id="startAndStop" disabled>Start</button></div>
+
+</div>
+<p class="err" id="errorMessage"></p>
+<div>
+    <table cellpadding="0" cellspacing="0" width="0" border="0">
+    <tr>
+        <td>
+            <video id="videoInput" width=320 height=240></video>
+        </td>
+        <td>
+            <canvas id="canvasOutput" width=320 height=240></canvas>
+        </td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <td>
+            <div class="caption">videoInput</div>
+        </td>
+        <td>
+            <div class="caption">canvasOutput</div>
+        </td>
+        <td></td>
+        <td></td>
+    </tr>
+    </table>
+</div>
+<script src="https://docs.opencv.org/3.4.1/opencv.js"></script>
+<!--script src="https://webrtc.github.io/adapter/adapter-5.0.4.js" type="text/javascript"></script-->
+<script src="./utils.js"></script>
+<script>
+
+
+
+let streaming = false;
+let videoInput = document.getElementById('videoInput');
+let startAndStop = document.getElementById('startAndStop');
+let canvasOutput = document.getElementById('canvasOutput');
+let canvasContext = canvasOutput.getContext('2d');
+
+
+
+let src = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
+let dst = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC1);
+let cap = new cv.VideoCapture(videoInput);
+
+const FPS = 30;
+function processVideo() {
+    try {
+        let begin = Date.now();
+        // start processing.
+        cap.read(src);
+        cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+        cv.imshow('canvasOutput', dst);
+        // schedule the next one.
+        let delay = 1000/FPS - (Date.now() - begin);
+        setTimeout(processVideo, delay);
+
+    } catch (err) {
+        console.log(err);
+    }
+};
+
+processVideo();
+// schedule the first one.
+//setTimeout(processVideo, 0);
+
+let utils = new Utils('errorMessage');
+
+
+
+
+startAndStop.addEventListener('click', () => {
+    if (!streaming) {
+        utils.clearError();
+        utils.startCamera('qvga', onVideoStarted, 'videoInput');
+    } else {
+        utils.stopCamera();
+        onVideoStopped();
+
+    }
+});
+
+function onVideoStarted() {
+
+
+    streaming = true;
+    startAndStop.innerText = 'Stop';
+    videoInput.width = videoInput.videoWidth;
+    videoInput.height = videoInput.videoHeight;
+
+
+}
+
+function onVideoStopped() {
+    streaming = false;
+
+    canvasContext.clearRect(0, 0, canvasOutput.width, canvasOutput.height);
+    startAndStop.innerText = 'Start';
+                     if(!streaming)
+        {
+            console.log(streaming)
+            //↓この一連超重要
+            src.delete();
+            dst.delete();
+            src = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
+            dst = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC1);
+            cap = new cv.VideoCapture(videoInput);
+            //
+            return;
+        }
+}
+
+utils.loadOpenCv(() => {
+    startAndStop.removeAttribute('disabled');
+});
+</script>
+</body>
+</html>

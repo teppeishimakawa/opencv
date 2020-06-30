@@ -1,0 +1,362 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+
+<link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+
+<p>
+</p>
+<div>
+<div class="control"><button id="startAndStop" disabled>Start</button></div>
+</div>
+<p class="err" id="errorMessage"></p>
+<div>
+    <table cellpadding="0" cellspacing="0" width="0" border="0">
+    <tr>
+        <td>
+            <div id="parent">
+            <video id="videoInput" width="320" height="240" muted loop></video>
+             <img id="child" src="./bomb.png"></img>
+            </div>
+        </td>
+        <td>
+            <canvas id="canvasOutput" width="320" height="240" ></canvas>
+        </td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <td>
+            <div class="caption">videoInput</div>
+        </td>
+        <td>
+            <div class="caption">canvasOutput</div>
+        </td>
+        <td></td>
+        <td></td>
+    </tr>
+    </table>
+</div>
+<div id="point"></div>
+
+<!--script src="https://webrtc.github.io/adapter/adapter-5.0.4.js" type="text/javascript"></script-->
+
+
+
+<script type="text/javascript">
+
+
+const OPENCV_URL = "https://docs.opencv.org/3.4.1/opencv.js";
+
+
+
+let streaming = false;
+let videoInput = document.getElementById('videoInput');
+let startAndStop = document.getElementById('startAndStop');
+let canvasOutput = document.getElementById('canvasOutput');
+let canvasContext = canvasOutput.getContext('2d');
+
+
+
+    function isMobile()
+{
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  const isiOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return isAndroid || isiOS;
+}
+
+const mobile = isMobile();
+
+      window.onload = function()
+      {
+        navigator.mediaDevices = navigator.mediaDevices || ((navigator.mozGetUserMedia || navigator.webkitGetUserMedia) ?
+        {
+           getUserMedia: function(c) {
+             return new Promise(function(y, n) {
+               (navigator.mozGetUserMedia ||
+                navigator.webkitGetUserMedia).call(navigator, c, y, n);
+             });
+           }
+        } : null);
+
+        if (!navigator.mediaDevices)
+        {
+          console.log("getUserMedia() not supported.");
+          return;
+        }
+        var constraints = { audio: false, video: {
+      facingMode: 'user',
+      // Only setting the video to a specified size in order to accommodate a
+      // point cloud, so on mobile devices accept the default size.
+      width: mobile ? undefined : 320,
+      height: mobile ? undefined : 240} };
+
+        navigator.mediaDevices.getUserMedia(constraints)
+        .then(function(stream) {
+           videoInput.srcObject = stream
+           //videoInput.src='./mara1.mp4'
+          videoInput.onloadedmetadata = function(e)
+          {
+            videoInput.play();
+          }
+  　　　　});
+    }
+
+
+
+
+
+
+var topp=20;
+var leftt=20;
+var wid=20;
+var hei=20;
+
+var trackWindow;
+
+
+function done()
+{
+
+let cap = new cv.VideoCapture(videoInput);
+
+// take first frame of the video
+let frame = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
+cap.read(frame);
+
+// hardcode the initial location of window
+trackWindow = new cv.Rect(leftt, topp, wid, hei);
+
+// set up the ROI for tracking
+let roi = frame.roi(trackWindow);
+let hsvRoi = new cv.Mat();
+cv.cvtColor(roi, hsvRoi, cv.COLOR_RGBA2RGB);
+cv.cvtColor(hsvRoi, hsvRoi, cv.COLOR_RGB2HSV);
+let mask = new cv.Mat();
+let lowScalar = new cv.Scalar(30, 30, 0);
+let highScalar = new cv.Scalar(180, 180, 180);
+let low = new cv.Mat(hsvRoi.rows, hsvRoi.cols, hsvRoi.type(), lowScalar);
+let high = new cv.Mat(hsvRoi.rows, hsvRoi.cols, hsvRoi.type(), highScalar);
+cv.inRange(hsvRoi, low, high, mask);
+let roiHist = new cv.Mat();
+let hsvRoiVec = new cv.MatVector();
+hsvRoiVec.push_back(hsvRoi);
+cv.calcHist(hsvRoiVec, [0], mask, roiHist, [180], [0, 180]);
+cv.normalize(roiHist, roiHist, 0, 255, cv.NORM_MINMAX);
+
+// delete useless mats.
+roi.delete(); hsvRoi.delete(); mask.delete(); low.delete(); high.delete(); hsvRoiVec.delete();
+
+// Setup the termination criteria, either 10 iteration or move by atleast 1 pt
+let termCrit = new cv.TermCriteria(cv.TERM_CRITERIA_EPS | cv.TERM_CRITERIA_COUNT, 500, 1);
+
+let hsv = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC3);
+let hsvVec = new cv.MatVector();
+hsvVec.push_back(hsv);
+let dst = new cv.Mat();
+let trackBox = null;
+
+const FPS = 30;
+function processVideo() {
+    try {
+        if (!streaming) {
+            // clean and stop.
+            frame.delete(); dst.delete(); hsvVec.delete(); roiHist.delete(); hsv.delete();
+            return;
+        }
+        let begin = Date.now();
+
+        // start processing.
+        cap.read(frame);
+        cv.cvtColor(frame, hsv, cv.COLOR_RGBA2RGB);
+        cv.cvtColor(hsv, hsv, cv.COLOR_RGB2HSV);
+        cv.calcBackProject(hsvVec, [0], roiHist, dst, [0, 180], 1);
+
+        // apply camshift to get the new location
+        [trackBox, trackWindow] = cv.CamShift(dst, trackWindow, termCrit);
+
+        // Draw it on image
+        //01
+        //32 の頂点順
+        let pts = cv.rotatedRectPoints(trackBox);
+        cv.line(frame, pts[0], pts[1], [255, 0, 0, 255], 3);
+        cv.line(frame, pts[1], pts[2], [255, 0, 0, 255], 3);
+        cv.line(frame, pts[2], pts[3], [255, 0, 0, 255], 3);
+        cv.line(frame, pts[3], pts[0], [255, 0, 0, 255], 3);
+        cv.imshow('canvasOutput', frame);
+        //document.getElementById("point").innerHTML=Math.round(pts[1].x)  + "," + Math.round(pts[0].x) + "," + Math.round(pts[2].y) +"," + Math.round(pts[1].y);
+
+document.getElementById("point").innerHTML= trackBox.center.x + "," + trackBox.center.y;
+
+        // schedule the next one.
+        let delay = 1000/FPS - (Date.now() - begin);
+        setTimeout(processVideo, delay);
+
+var child=document.getElementById("child");
+var parent=document.getElementById("parent");
+var bomb_y=child.getBoundingClientRect().top + child.getBoundingClientRect().height/2 - parent.getBoundingClientRect().top
+var bomb_x=child.getBoundingClientRect().left + child.getBoundingClientRect().width/2 - parent.getBoundingClientRect().left
+
+
+var hit=Math.sqrt(Math.pow(trackBox.center.x - bomb_x,2) + Math.pow(trackBox.center.y - bomb_y,2));
+
+if(hit < 30)
+{
+document.getElementById("point").innerHTML="hit!!"
+videoInput.pause();
+document.getElementById("child").style.animationPlayState = "paused";
+}
+
+console.log(bomb_y);
+
+var flg=0;
+
+if(bomb_y > 240)
+{
+flg=1;
+}
+
+if(bomb_y < 3)
+{
+flg=0;
+}
+
+
+if(flg == 1)
+child.style.right=Math.random()*320 + "px"
+console.log("ok")
+
+
+
+
+//console.log(bomb_x,bomb_y)
+
+//videoInputの座標
+//console.log(parent.getBoundingClientRect().top,parent.getBoundingClientRect().left)
+//console.log(child.left + child.width/2 , child.top + child./2)
+
+
+    } catch (err) {
+        console.log(err);
+    }
+};
+
+// schedule the first one.
+setTimeout(processVideo, 0);
+}
+
+
+window.addEventListener("mousedown", function(e)
+{
+  console.log(e.offsetX, e.offsetY);
+  leftt=e.offsetX;
+  topp=e.offsetY;
+// hardcode the initial location of window
+//trackWindow = new cv.Rect(top, left, wid, hei);
+
+});
+
+window.addEventListener("mouseup", function(e)
+{
+  console.log(e.offsetX, e.offsetY);
+  wid=e.offsetX - leftt;
+  hei=e.offsetY - topp;
+// hardcode the initial location of window
+//trackWindow = new cv.Rect(top, left, wid, hei);
+
+});
+
+
+
+
+
+
+
+
+
+
+document.body.addEventListener("keydown", (event) =>
+{
+    if(event.key == " " )
+    {
+     if (!streaming) {
+        videoInput.play().then(() => {
+            onVideoStarted();
+            document.getElementById("child").classList.add('fall')
+        });
+     } else {
+        videoInput.pause();
+        //videoInput.currentTime = 0;
+        onVideoStopped();
+     }
+    }
+});
+
+
+
+
+function onVideoStarted() {
+    streaming = true;
+    startAndStop.innerText = 'Stop';
+    videoInput.height = videoInput.width * (videoInput.videoHeight / videoInput.videoWidth);
+    done();
+
+
+}
+
+function onVideoStopped() {
+    streaming = false;
+    canvasContext.clearRect(0, 0, canvasOutput.width, canvasOutput.height);
+    startAndStop.innerText = 'Start';
+}
+
+loadOpenCv(() => {
+    videoInput.addEventListener('canplay', () => {
+        startAndStop.removeAttribute('disabled');
+    });
+    //videoInput.src = 'warp.mp4';
+
+
+});
+
+
+
+
+    function loadOpenCv(onloadCallback) {
+        let script = document.createElement('script');
+        script.setAttribute('async', '');
+        script.setAttribute('type', 'text/javascript');
+        script.addEventListener('load', () => {
+            if (cv.getBuildInformation)
+            {
+                console.log(cv.getBuildInformation());
+                onloadCallback();
+            }
+            else
+            {
+                // WASM
+                cv['onRuntimeInitialized']=()=>{
+                    console.log(cv.getBuildInformation());
+                    onloadCallback();
+                }
+            }
+        });
+        script.addEventListener('error', () => {
+            self.printError('Failed to load ' + OPENCV_URL);
+        });
+        script.src = OPENCV_URL;
+        let node = document.getElementsByTagName('script')[0];
+        node.parentNode.insertBefore(script, node);
+    };
+
+
+
+
+
+</script>
+</body>
+</html>

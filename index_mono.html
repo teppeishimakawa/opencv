@@ -1,0 +1,215 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>opencv_test</title>
+<link href="./style.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+
+<div>
+<div class="control"><button id="startAndStop" disabled>Start</button></div>
+
+</div>
+<p class="err" id="errorMessage"></p>
+<div>
+    <table cellpadding="0" cellspacing="0" width="0" border="0">
+    <tr>
+        <td>
+            <video id="videoInput" width=320 height=240></video>
+        </td>
+        <td>
+            <canvas id="canvasOutput" width=320 height=240></canvas>
+        </td>
+        <td></td>
+        <td></td>
+    </tr>
+    <tr>
+        <td>
+            <div class="caption">videoInput</div>
+        </td>
+        <td>
+            <div class="caption">canvasOutput</div>
+        </td>
+        <td></td>
+        <td></td>
+    </tr>
+    </table>
+</div>
+<script src="https://docs.opencv.org/3.4.1/opencv.js"></script>
+
+<script>
+
+let streaming = false;
+let videoInput = document.getElementById('videoInput');
+let startAndStop = document.getElementById('startAndStop');
+let canvasOutput = document.getElementById('canvasOutput');
+let canvasContext = canvasOutput.getContext('2d');
+
+
+let src = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
+let dst = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC1);
+let cap = new cv.VideoCapture(videoInput);
+
+const FPS = 30;
+
+function processVideo()
+{
+    try {
+        let begin = Date.now();
+        // start processing.
+        cap.read(src);
+        cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
+        cv.imshow('canvasOutput', dst);
+        // schedule the next one.
+        let delay = 1000/FPS - (Date.now() - begin);
+        setTimeout(processVideo, delay);
+
+    } catch (err) {
+        console.log(err);
+    }
+};
+
+processVideo();
+// schedule the first one.
+//setTimeout(processVideo, 0);
+
+
+
+startAndStop.addEventListener('click', () => {
+    if (!streaming) {
+        startCamera('qvga', onVideoStarted, 'videoInput');
+    } else {
+        stopCamera();
+        onVideoStopped();
+
+    }
+});
+
+function onVideoStarted() {
+
+
+    streaming = true;
+    startAndStop.innerText = 'Stop';
+    videoInput.width = videoInput.videoWidth;
+    videoInput.height = videoInput.videoHeight;
+
+
+}
+
+function onVideoStopped() {
+    streaming = false;
+
+    canvasContext.clearRect(0, 0, canvasOutput.width, canvasOutput.height);
+    startAndStop.innerText = 'Start';
+                     if(!streaming)
+        {
+            console.log(streaming)
+            //↓この一連超重要
+            src.delete();
+            dst.delete();
+            src = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC4);
+            dst = new cv.Mat(videoInput.height, videoInput.width, cv.CV_8UC1);
+            cap = new cv.VideoCapture(videoInput);
+            //
+            return;
+        }
+}
+
+
+
+
+
+
+ function startCamera(resolution, callback, videoId)
+ {
+        const constraints = {
+            'qvga': {width: {exact: 320}, height: {exact: 240}},
+            'vga': {width: {exact: 640}, height: {exact: 480}}};
+        let video = document.getElementById(videoId);
+        if (!video) {
+            video = document.createElement('video');
+        }
+
+        let videoConstraint = constraints[resolution];
+        if (!videoConstraint) {
+            videoConstraint = true;
+        }
+
+        navigator.mediaDevices.getUserMedia({video: videoConstraint, audio: false})
+            .then(function(stream) {
+                video.srcObject = stream;
+                video.play();
+                self.video = video;
+                self.stream = stream;
+                self.onCameraStartedCallback = callback;
+                video.addEventListener('canplay', onVideoCanPlay, false);
+            })
+            .catch(function(err) {
+                console.log('Camera Error: ' + err.name + ' ' + err.message);
+            });
+    };
+
+
+
+
+     function stopCamera()
+     {
+        if (this.video) {
+            this.video.pause();
+            this.video.srcObject = null;
+            this.video.removeEventListener('canplay', onVideoCanPlay);
+        }
+        if (this.stream) {
+            this.stream.getVideoTracks()[0].stop();
+        }
+    };
+
+    function onVideoCanPlay()
+    {
+        if (self.onCameraStartedCallback) {
+            self.onCameraStartedCallback(self.stream, self.video);
+        }
+    };
+
+   const OPENCV_URL = "https://docs.opencv.org/3.4.1/opencv.js";
+
+    function loadOpenCv(onloadCallback)
+    {
+        let script = document.createElement('script');
+        script.setAttribute('async', '');
+        script.setAttribute('type', 'text/javascript');
+        script.addEventListener('load', () => {
+            if (cv.getBuildInformation)
+            {
+                console.log(cv.getBuildInformation());
+                onloadCallback();
+            }
+            else
+            {
+                // WASM
+                cv['onRuntimeInitialized']=()=>{
+                    console.log(cv.getBuildInformation());
+                    onloadCallback();
+                }
+            }
+        });
+        script.addEventListener('error', () => {
+            this.printError('Failed to load ' + OPENCV_URL);
+        });
+        script.src = OPENCV_URL;
+        let node = document.getElementsByTagName('script')[0];
+        node.parentNode.insertBefore(script, node);
+    };
+
+
+
+loadOpenCv(() =>
+{
+    startAndStop.removeAttribute('disabled');
+});
+
+</script>
+</body>
+</html>
